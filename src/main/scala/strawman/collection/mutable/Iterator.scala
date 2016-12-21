@@ -1,7 +1,8 @@
 package strawman.collection.mutable
 
-import scala.{Boolean, Int, Unit, Nothing, NoSuchElementException}
-import strawman.collection.{IndexedView, IterableOnce}
+import scala.{Boolean, Int, NoSuchElementException, Nothing, Unit}
+import strawman.collection.IterableOnce
+import strawman.collection.immutable.IndexedView
 
 /** A core Iterator class */
 trait Iterator[+A] { self =>

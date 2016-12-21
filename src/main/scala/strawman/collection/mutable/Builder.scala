@@ -2,7 +2,7 @@ package strawman.collection.mutable
 
 import scala.{Boolean, Any, Char}
 import java.lang.String
-import strawman.collection.{IterableMonoTransforms, IterableOnce}
+import strawman.collection.{IterableMonoTransformsFromIterable, IterableOnce}
 
 /** Base trait for collection builders */
 trait Builder[-A, +To] { self =>
@@ -31,7 +31,7 @@ trait Builder[-A, +To] { self =>
   * @tparam  A    the element type of the collection
   * @tparam Repr  the type of the underlying collection
   */
-trait Buildable[+A, +Repr] extends Any with IterableMonoTransforms[A, Repr]  {
+trait Buildable[+A, +Repr] extends Any with IterableMonoTransformsFromIterable[A, Repr]  {
 
   /** Creates a new builder. */
   protected[this] def newBuilder: Builder[A, Repr]

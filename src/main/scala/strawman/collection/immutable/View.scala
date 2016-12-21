@@ -1,11 +1,13 @@
-package strawman.collection
+package strawman.collection.immutable
 
-import scala.{Int, Boolean, Nothing, annotation}
-import scala.Predef.intWrapper
 import strawman.collection.mutable.Iterator
+import strawman.collection.{ArrayLike, Iterable, IterableLikeFromIterable, IterableOnce}
+
+import scala.Predef.intWrapper
+import scala.{Boolean, Int, Nothing}
 
 /** Concrete collection type: View */
-trait View[+A] extends Iterable[A] with IterableLike[A, View] {
+trait View[+A] extends Iterable[A] with IterableLikeFromIterable[A, View] {
   override def view = this
 
   /** Avoid copying if source collection is already a view. */

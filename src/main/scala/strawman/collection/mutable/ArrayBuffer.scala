@@ -1,13 +1,17 @@
 package strawman.collection.mutable
 
-import scala.{Array, Int, Boolean, Unit, AnyRef}
+import strawman.collection.immutable.IndexedView
+
+import scala.{AnyRef, Array, Boolean, Int, Unit}
 import scala.Predef.intWrapper
-import strawman.collection.{IndexedView, Iterable, IterableFactory, IterableOnce, Seq, SeqLike}
+import strawman.collection.{Iterable, IterableFactory, IterableLikeFromIterable, IterableOnce, Seq, SeqLike, SeqMonoTransformsFromIterable}
 
 /** Concrete collection type: ArrayBuffer */
 class ArrayBuffer[A] private (initElems: Array[AnyRef], initLength: Int)
   extends Seq[A]
     with SeqLike[A, ArrayBuffer]
+    with IterableLikeFromIterable[A, ArrayBuffer]
+    with SeqMonoTransformsFromIterable[A, ArrayBuffer[A]]
     with Buildable[A, ArrayBuffer[A]]
     with Builder[A, ArrayBuffer[A]] {
 

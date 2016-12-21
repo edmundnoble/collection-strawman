@@ -1,8 +1,8 @@
 package strawman.collection
 
-import scala.{Any, Boolean, Int, IndexOutOfBoundsException}
+import scala.{Any, Boolean, IndexOutOfBoundsException, Int}
 import strawman.collection.mutable.Iterator
-import strawman.collection.immutable.{List, Nil}
+import strawman.collection.immutable.{IndexedView, List, Nil}
 
 import scala.annotation.unchecked.uncheckedVariance
 
@@ -13,7 +13,11 @@ trait Seq[+A] extends Iterable[A] with SeqLike[A, Seq] with ArrayLike[A]
   *  `tail` operations.
   *  Known subclasses: List, LazyList
   */
-trait LinearSeq[+A] extends Seq[A] with LinearSeqLike[A, LinearSeq] { self =>
+trait LinearSeq[+A]
+  extends Seq[A]
+    with LinearSeqLike[A, LinearSeq]
+    with IterableLikeFromIterable[A, LinearSeq]
+    with SeqMonoTransformsFromIterable[A, LinearSeq[A @uncheckedVariance]] { self =>  // sound bcs of VarianceNote
 
   /** To be overridden in implementations: */
   def isEmpty: Boolean
@@ -78,6 +82,10 @@ trait LinearSeqLike[+A, +C[X] <: LinearSeq[X]] extends SeqLike[A, C] {
 
 /** Type-preserving transforms over sequences. */
 trait SeqMonoTransforms[+A, +Repr] extends Any with IterableMonoTransforms[A, Repr] {
+  def reverse: Repr
+}
+
+trait SeqMonoTransformsFromIterable[+A, +Repr] extends Any with IterableMonoTransformsFromIterable[A, Repr] {
   def reverse: Repr = coll.view match {
     case v: IndexedView[A] => fromIterableWithSameElemType(v.reverse)
     case _ =>

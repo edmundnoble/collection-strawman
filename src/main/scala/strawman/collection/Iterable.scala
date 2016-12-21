@@ -2,10 +2,12 @@ package strawman.collection
 
 import scala.annotation.unchecked.uncheckedVariance
 import scala.reflect.ClassTag
-import scala.{Int, Boolean, Array, Any, Unit, StringContext}
+import scala.{Any, Array, Boolean, Int, StringContext, Unit}
+import scala.Predef.???
 import java.lang.String
 
-import strawman.collection.mutable.{ArrayBuffer, StringBuilder}
+import strawman.collection.immutable.View
+import strawman.collection.mutable.{ArrayBuffer, StringBuilder, Iterator}
 
 /** Base trait for generic collections */
 trait Iterable[+A] extends IterableOnce[A] with IterableLike[A, Iterable] {
@@ -25,11 +27,19 @@ trait Iterable[+A] extends IterableOnce[A] with IterableLike[A, Iterable] {
   *
   */
 trait IterableLike[+A, +C[X] <: Iterable[X]]
-  extends FromIterable[C]
-    with IterableOps[A]
+  extends IterableOps[A]
     with IterableMonoTransforms[A, C[A @uncheckedVariance]] // sound bcs of VarianceNote
-    with IterablePolyTransforms[A, C] {
+    with IterablePolyTransforms[A, C]
 
+/**
+  * Implements the operations of IterableLike based on the ability to build
+  * a collection `C[A]` from an `Iterable[A]`.
+  */
+trait IterableLikeFromIterable[+A, +C[X] <: Iterable[X]]
+  extends IterableLike[A, C]
+    with IterableMonoTransformsFromIterable[A, C[A @uncheckedVariance]] // sound bcs of VarianceNote
+    with IterablePolyTransformsFromIterable[A, C]
+    with FromIterable[C] {
   /** Create a collection of type `C[A]` from the elements of `coll`, which has
     *  the same element type as this collection. Overridden in StringOps and ArrayOps.
     */
@@ -52,7 +62,7 @@ trait IterableFactory[+C[X] <: Iterable[X]] extends FromIterable[C] {
   */
 trait IterableOps[+A] extends Any {
   protected def coll: Iterable[A]
-  private def iterator() = coll.iterator()
+  private def iterator(): Iterator[A] = coll.iterator()
 
   /** Apply `f` to each element for tis side effects */
   def foreach(f: A => Unit): Unit = iterator().foreach(f)
@@ -139,6 +149,14 @@ trait IterableOps[+A] extends Any {
   *  as the one they are invoked on.
   */
 trait IterableMonoTransforms[+A, +Repr] extends Any {
+  def filter(p: A => Boolean): Repr
+  def partition(p: A => Boolean): (Repr, Repr)
+  def take(n: Int): Repr
+  def drop(n: Int): Repr
+  def tail: Repr
+}
+
+trait IterableMonoTransformsFromIterable[+A, +Repr] extends Any with IterableMonoTransforms[A, Repr] {
   protected def coll: Iterable[A]
   protected[this] def fromIterableWithSameElemType(coll: Iterable[A]): Repr
 
@@ -166,12 +184,19 @@ trait IterableMonoTransforms[+A, +Repr] extends Any {
   def drop(n: Int): Repr = fromIterableWithSameElemType(View.Drop(coll, n))
 
   /** The rest of the collection without its first element. */
-  def tail: Repr = drop(1)
+  def tail: Repr = if (coll.isEmpty) ??? else drop(1)
 }
 
 /** Transforms over iterables that can return collections of different element types.
   */
-trait IterablePolyTransforms[+A, +C[A]] extends Any {
+trait IterablePolyTransforms[+A, +C[X]] extends Any {
+  def map[B](f: A => B): C[B]
+  def flatMap[B](f: A => IterableOnce[B]): C[B]
+  def ++[B >: A](xs: IterableOnce[B]): C[B]
+  def zip[B](xs: IterableOnce[B]): C[(A @uncheckedVariance, B)] // sound bcs of VarianceNote
+}
+
+trait IterablePolyTransformsFromIterable[+A, +C[X]] extends Any with IterablePolyTransforms[A, C] {
   protected def coll: Iterable[A]
   def fromIterable[B](coll: Iterable[B]): C[B]
 

@@ -1,8 +1,8 @@
 package strawman.collection
 
-import strawman.collection.immutable.List
+import strawman.collection.immutable.{IndexedView, List, View}
 
-import scala.{Array, Char, Int, AnyVal}
+import scala.{AnyVal, Array, Char, Int}
 import scala.Predef.String
 import strawman.collection.mutable.{ArrayBuffer, Buildable, StringBuilder}
 
@@ -10,8 +10,8 @@ import scala.reflect.ClassTag
 
 class StringOps(val s: String)
   extends AnyVal with IterableOps[Char]
-    with SeqMonoTransforms[Char, String]
-    with IterablePolyTransforms[Char, List]
+    with SeqMonoTransformsFromIterable[Char, String]
+    with IterablePolyTransformsFromIterable[Char, List]
     with Buildable[Char, String]
     with ArrayLike[Char] {
 
@@ -75,7 +75,7 @@ case class StringView(s: String) extends IndexedView[Char] {
 
 class ArrayOps[A](val xs: Array[A])
   extends AnyVal with IterableOps[A]
-    with SeqMonoTransforms[A, Array[A]]
+    with SeqMonoTransformsFromIterable[A, Array[A]]
     with Buildable[A, Array[A]]
     with ArrayLike[A] {
 
