@@ -2,9 +2,14 @@ package strawman
 package collection
 package immutable
 
-import mutable.{ArrayBuffer, Builder, ListBuffer}
-
+import strawman.collection.mutable.{ArrayBuffer, Builder}
+import scala.annotation.unchecked.uncheckedVariance
 import scala.annotation.tailrec
+import scala.{Any, Nothing, Boolean, Unit, Int, StringBuilder, inline, NoSuchElementException, IndexOutOfBoundsException}
+import scala.Predef.???
+import mutable.{Builder, ListBuffer}
+
+import scala.annotation.unchecked.uncheckedVariance
 
 /**
   * Stack-ended catenable queue. Supports O(1) append, and (amortized)
@@ -17,8 +22,10 @@ import scala.annotation.tailrec
   * Implementation from fs2.util.Catenable in the Functional Streams for Scala (fs2) project
   */
 sealed abstract class Steque[+A]
-  extends LinearSeq[A]
-    with LinearSeqLike[A, Steque] {
+  extends Seq[A]
+    with LinearSeq[A]
+    with SeqOps[A, Steque, Steque[A]]
+    with Buildable[A, Steque[A]] {
 
   import Steque._
 
@@ -39,11 +46,6 @@ sealed abstract class Steque[+A]
           }
         case Single(_) =>
           return reassociateRights(rights, rightsLength)
-        case OfSeq(underlyingSequence) =>
-          val next =
-            if (rightsLength == 0) Steque.fromSeq(underlyingSequence.tail)
-            else rights.foldLeft(Steque.fromSeq(underlyingSequence.tail))((x, y) => Append(y, x))
-          return next
         case Append(l, r) =>
           c = l
           rights += r
@@ -67,8 +69,6 @@ sealed abstract class Steque[+A]
           }
         case Single(a) =>
           return a
-        case OfSeq(underlyingSequence) =>
-          return underlyingSequence.head
         case Append(l, r) =>
           c = l
           rights += r
@@ -77,10 +77,14 @@ sealed abstract class Steque[+A]
     ???
   }
 
-  final override def ++[B >: A](c: IterableOnce[B]): Steque[B] = c match {
+  final override def concat[B >: A](c: IterableOnce[B]): Steque[B] = c match {
     case (s: Steque[B]) => append(this, s)
-    case (s: Seq[B]) => append(this, fromSeq(s))
+    case (s: Seq[B]) => append(this, Steque.fromIterable(s))
     case _ => super.++(c)
+  }
+
+  final def ++:[B >: A](c: Steque[B]): Steque[B] = {
+    append(this, c)
   }
 
   final def concat[B >: A](steque: Steque[B]): Steque[B] = append(this, steque)
@@ -122,19 +126,6 @@ sealed abstract class Steque[+A]
             c = rights(rightsLength - 1)
             rights.remove(rightsLength - 1)
           }
-        case OfSeq(underlyingSequence) =>
-          val underlyingSequenceLength = underlyingSequence.length
-          if (underlyingSequenceLength < (idx - count)) {
-            if (rightsLength == 0) {
-              throw new IndexOutOfBoundsException()
-            } else {
-              count += underlyingSequenceLength
-              c = rights(rightsLength - 1)
-              rights.remove(rightsLength - 1)
-            }
-          } else {
-            return underlyingSequence(idx - count)
-          }
         case Append(l, r) => c = l; rights += r
       }
     }
@@ -165,13 +156,6 @@ sealed abstract class Steque[+A]
           result = f(result, a)
           if (rightsLength == 0) c = null
           else c = reassociateRights(rights, rightsLength)
-        case OfSeq(underlyingSequence) =>
-          result = underlyingSequence.foldLeft(result)(f)
-          if (rightsLength == 0) c = null
-          else {
-            c = rights(rightsLength - 1)
-            rights.remove(rightsLength - 1)
-          }
         case Append(l, r) => c = l; rights += r
       }
     }
@@ -199,14 +183,6 @@ sealed abstract class Steque[+A]
           } else {
             c = null
           }
-        case OfSeq(underlyingSequence) =>
-          underlyingSequence.reverse.foldRight(true)((a, b) => b && f(a))
-          if (rightsLength == 0) {
-            c = null
-          } else {
-            c = rights(rightsLength - 1)
-            rights.remove(rightsLength - 1)
-          }
         case Append(l, r) => c = l; rights += r
       }
     }
@@ -233,14 +209,6 @@ sealed abstract class Steque[+A]
           } else {
             c = null
           }
-        case OfSeq(underlyingSequence) =>
-          underlyingSequence.foreach(f)
-          if (rightsLength == 0) {
-            c = null
-          } else {
-            c = rights(rightsLength - 1)
-            rights.remove(rightsLength - 1)
-          }
         case Append(l, r) => c = l; rights += r
       }
     }
@@ -257,9 +225,31 @@ sealed abstract class Steque[+A]
       sb.result()
     }
   }
+
+  override protected[this] def newBuilder: Builder[A, Steque[A]] =
+    Steque.newBuilder
+
+  override protected[this] def fromSpecificIterable(coll: collection.Iterable[A]): Steque[A] =
+    fromIterable(coll)
+
 }
 
 object Steque extends IterableFactory[Steque] {
+
+  def newBuilder[A]: mutable.Builder[A, Steque[A]] = new mutable.Builder[A, Steque[A]] {
+    var current: Steque[A] = empty
+
+    override def add(elem: A): this.type = {
+      current = current.snoc(elem)
+      this
+    }
+
+    override def clear(): Unit =
+      current = empty
+
+    override def result: Steque[A] =
+      current
+  }
 
   private[Steque] def reassociateRights[A](rights: ArrayBuffer[Steque[A]], length: Int): Steque[A] =
     if (length == 0) {
@@ -286,27 +276,6 @@ object Steque extends IterableFactory[Steque] {
     override def isEmpty: Boolean = false // b/c `append` constructor doesn't allow either branch to be empty
   }
 
-  final case class OfSeq[A](underlyingSequence: collection.Seq[A]) extends Steque[A] {
-    override def isEmpty: Boolean = false // b/c `ofSeq` constructor doesn't allow the underlying sequence to be empty
-  }
-
-  override def newBuilder[A]: mutable.Builder[A, Steque[A]] = new mutable.Builder[A, Steque[A]] {
-    var current: Steque[A] = empty
-
-    override def +=(elem: A): this.type = {
-      current = current.snoc(elem)
-      this
-    }
-
-    override def clear(): Unit = {
-      current = empty
-    }
-
-    override def result(): Steque[A] = {
-      current
-    }
-  }
-
   /** Empty catenable. */
   override def empty[A]: Steque[A] = Empty
 
@@ -327,21 +296,9 @@ object Steque extends IterableFactory[Steque] {
     }
 
   /** Creates a catenable from the specified sequence. */
-  def fromSeq[A](s: collection.Seq[A]): Steque[A] =
+  override def fromIterable[A](s: collection.Iterable[A]): Steque[A] =
     if (s.isEmpty) Empty
-    else OfSeq(s)
-
-  /** Creates a catenable from the specified sequence. */
-  def fromIterable[A](s: collection.Iterable[A]): Steque[A] =
-    if (s.isEmpty) empty
-    else OfSeq(s.to(ArrayBuffer))
-
-  /** Creates a catenable from the specified elements. */
-  override def apply[A](as: A*): Steque[A] = {
-    // TODO: uncomment when A* and Seq are the same type
-    // fromSeq[A](as)
-    ???
-  }
+    else s.foldLeft(Steque.empty[A])((st, sa) => st :+ sa)
 
 }
 
