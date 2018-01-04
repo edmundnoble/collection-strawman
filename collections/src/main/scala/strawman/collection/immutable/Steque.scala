@@ -24,12 +24,17 @@ import scala.annotation.unchecked.uncheckedVariance
 sealed abstract class Steque[+A]
   extends Seq[A]
     with LinearSeq[A]
-    with SeqOps[A, Steque, Steque[A]]
-    with Buildable[A, Steque[A]] {
+    with SeqOps[A, Steque, Steque[A]] {
 
   import Steque._
 
-  override def fromIterable[B](coll: collection.Iterable[B]): Steque[B] = Steque.fromIterable(coll)
+  protected[this] def newSpecificBuilder(): Builder[A, Steque[A]] = 
+    Steque.newBuilder()
+
+  override protected[this] def fromSpecificIterable(coll: collection.Iterable[A]): Steque[A] =
+    from(coll)
+
+  def iterableFactory: SeqFactory[Steque] = Steque
 
   final override def tail: Steque[A] = {
     var c: Steque[A] = this
@@ -56,7 +61,7 @@ sealed abstract class Steque[+A]
 
   final override def head: A = {
     var c: Steque[A] = this
-    val rights = new collection.mutable.ArrayBuffer[Steque[A]]
+    val rights = new ArrayBuffer[Steque[A]]
     while (true) {
       c match {
         case Empty =>
@@ -77,17 +82,18 @@ sealed abstract class Steque[+A]
     ???
   }
 
-  final override def concat[B >: A](c: IterableOnce[B]): Steque[B] = c match {
+  final override def appendedAll[B >: A](suffix: collection.Iterable[B]): Steque[B] = suffix match {
     case (s: Steque[B]) => append(this, s)
-    case (s: Seq[B]) => append(this, Steque.fromIterable(s))
-    case _ => super.++(c)
+    case (s: Seq[B]) => append(this, Steque.from(s))
+    case _ => super.appendedAll(suffix)
   }
 
-  final def ++:[B >: A](c: Steque[B]): Steque[B] = {
-    append(this, c)
-  }
 
-  final def concat[B >: A](steque: Steque[B]): Steque[B] = append(this, steque)
+  final override def prependedAll[B >: A](prefix: collection.Iterable[B]): Steque[B] = prefix match {
+    case (s: Steque[B]) => append(s, this)
+    case (s: Seq[B]) => append(Steque.from(s), this)
+    case _ => super.prependedAll(prefix)
+  }
 
   /** Returns a new catenable consisting of `a` followed by this. O(1) runtime. */
   final def cons[A2 >: A](a: A2): Steque[A2] =
@@ -95,7 +101,7 @@ sealed abstract class Steque[+A]
     else Append(single(a), this)
 
   /** Alias for [[cons]]. */
-  final def +:[A2 >: A](a: A2): Steque[A2] =
+  final override def prepended[A2 >: A](a: A2): Steque[A2] =
     cons(a)
 
   /** Returns a new catenable consisting of this followed by `a`. O(1) runtime. */
@@ -104,7 +110,7 @@ sealed abstract class Steque[+A]
     else Append(this, single(a))
 
   /** Alias for [[snoc]]. */
-  final def :+[A2 >: A](a: A2): Steque[A2] =
+  final override def appended[A2 >: A](a: A2): Steque[A2] =
     snoc(a)
 
   override final def apply(idx: Int): A = {
@@ -226,17 +232,11 @@ sealed abstract class Steque[+A]
     }
   }
 
-  override protected[this] def newBuilder: Builder[A, Steque[A]] =
-    Steque.newBuilder
-
-  override protected[this] def fromSpecificIterable(coll: collection.Iterable[A]): Steque[A] =
-    fromIterable(coll)
-
 }
 
-object Steque extends IterableFactory[Steque] {
+object Steque extends SeqFactory[Steque] {
 
-  def newBuilder[A]: mutable.Builder[A, Steque[A]] = new mutable.Builder[A, Steque[A]] {
+  override def newBuilder[A](): mutable.Builder[A, Steque[A]] = new mutable.Builder[A, Steque[A]] {
     var current: Steque[A] = empty
 
     override def add(elem: A): this.type = {
@@ -296,9 +296,16 @@ object Steque extends IterableFactory[Steque] {
     }
 
   /** Creates a catenable from the specified sequence. */
-  override def fromIterable[A](s: collection.Iterable[A]): Steque[A] =
-    if (s.isEmpty) Empty
-    else s.foldLeft(Steque.empty[A])((st, sa) => st :+ sa)
+  override def from[A](s: collection.IterableOnce[A]): Steque[A] = {
+    val it = s.iterator
+    if (it.isEmpty) Empty
+    else {
+      var s = Steque.empty[A]
+      do {
+        s = s :+ it.next
+      } while (it.hasNext)
+      s
+    }
+  }
 
 }
-
